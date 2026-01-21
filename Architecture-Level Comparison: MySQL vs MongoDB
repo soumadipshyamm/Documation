@@ -1,0 +1,1028 @@
+# **Architecture-Level Comparison: MySQL vs MongoDB**
+
+## **1. System Architecture Overview**
+
+### **MySQL Architecture Components**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    MySQL Architecture                         │
+├─────────────┬─────────────┬────────────────┬─────────────────┤
+│  CLIENTS    │  CONNECTION │   SQL LAYER    │  STORAGE ENGINE  │
+│ (Applications)│  HANDLING  │                │  LAYER          │
+├─────────────┼─────────────┼────────────────┼─────────────────┤
+│ • JDBC/ODBC │ • Thread    │ • Parser       │ • InnoDB        │
+│ • Connectors│   Pool      │ • Optimizer    │ • MyISAM        │
+│ • ORM       │ • Connection│ • Query Cache  │ • Memory        │
+│ • APIs      │   Manager   │ • Caches       │ • Archive       │
+│             │             │ • Access Control│ • NDB Cluster   │
+└─────────────┴─────────────┴────────────────┴─────────────────┘
+                            │
+                    ┌───────▼───────┐
+                    │   FILE SYSTEM  │
+                    │ • Data Files  │
+                    │ • Log Files   │
+                    │ • Index Files │
+                    └───────────────┘
+```
+
+### **MongoDB Architecture Components**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    MongoDB Architecture                       │
+├─────────────┬────────────────────────────────────────────────┤
+│  APPLICATION │  MONGODB DEPLOYMENT                          │
+│  LAYER       ├──────────────────────────────────────────────┤
+├─────────────┼─────────────┬──────────────┬─────────────────┤
+│ • Drivers   │  STANDALONE │  REPLICA SET │  SHARDED CLUSTER│
+│ • ODMs      │   INSTANCE  │              │                 │
+│ • APIs      ├─────────────┼──────────────┼─────────────────┤
+│             │ • mongod    │ • Primary    │ • mongos        │
+│             │   process   │ • Secondaries│   (Router)      │
+│             │ • Data files│ • Arbiter    │ • Config Servers│
+│             │ • Journal   │ • Oplog      │ • Shards        │
+│             │             │              │   (Replica Sets)│
+└─────────────┴─────────────┴──────────────┴─────────────────┘
+                            │
+                    ┌───────▼───────┐
+                    │  STORAGE ENGINE │
+                    │ • WiredTiger   │
+                    │ • In-Memory    │
+                    │ • Encrypted    │
+                    └────────────────┘
+```
+
+## **2. Deployment Architecture Patterns**
+
+### **MySQL Deployment Architectures**
+
+```
+SCENARIO 1: SINGLE INSTANCE
+┌─────────────────────────────┐
+│      Application Server      │
+│        │                     │
+│        ▼                     │
+│  ┌─────────────┐           │
+│  │   MySQL     │           │
+│  │  Single     │           │
+│  │  Instance   │           │
+│  └─────────────┘           │
+└─────────────────────────────┘
+
+SCENARIO 2: MASTER-REPLICA
+┌─────────────────────────────────────────┐
+│          Application Servers             │
+│       ┌──────────┴──────────┐           │
+│       ▼                     ▼           │
+│  ┌─────────┐         ┌─────────┐       │
+│  │ MySQL   │◄───────►│ MySQL   │       │
+│  │ Master  │ Replica │ Replica │       │
+│  │ (RW)    │  Sync   │  (RO)   │       │
+│  └─────────┘         └─────────┘       │
+└─────────────────────────────────────────┘
+
+SCENARIO 3: MASTER-MASTER
+┌─────────────────────────────────────────┐
+│          Application Servers             │
+│       ┌──────────┴──────────┐           │
+│       ▼                     ▼           │
+│  ┌─────────┐         ┌─────────┐       │
+│  │ MySQL   │◄───────►│ MySQL   │       │
+│  │ Master1 │  Sync   │ Master2 │       │
+│  │ (RW)    │         │ (RW)    │       │
+│  └─────────┘         └─────────┘       │
+└─────────────────────────────────────────┘
+
+SCENARIO 4: INNODB CLUSTER
+┌─────────────────────────────────────────┐
+│          Application Server              │
+│                 │                        │
+│                 ▼                        │
+│         ┌─────────────┐                │
+│         │   MySQL     │                │
+│         │   Router    │                │
+│         └─────────────┘                │
+│           │         │                   │
+│    ┌──────┘         └──────┐           │
+│    ▼                       ▼           │
+│ ┌──────┐              ┌──────┐         │
+│ │MySQL │              │MySQL │         │
+│ │Group │◄────────────►│Group │         │
+│ │Member│ Group        │Member│         │
+│ └──────┘ Replication  └──────┘         │
+└─────────────────────────────────────────┘
+```
+
+### **MongoDB Deployment Architectures**
+
+```
+SCENARIO 1: STANDALONE
+┌─────────────────────────────┐
+│      Application Server      │
+│        │                     │
+│        ▼                     │
+│  ┌─────────────┐           │
+│  │   MongoDB   │           │
+│  │  Standalone │           │
+│  │   Instance  │           │
+│  └─────────────┘           │
+└─────────────────────────────┘
+
+SCENARIO 2: REPLICA SET
+┌─────────────────────────────────────────┐
+│          Application Servers             │
+│       ┌──────────┴──────────┐           │
+│       ▼                     ▼           │
+│  ┌─────────┐         ┌─────────┐       │
+│  │ Primary │◄───────►│Secondary│       │
+│  │  Node   │ Oplog   │  Node   │       │
+│  │  (RW)   │ Replica │  (RO)   │       │
+│  └─────────┘         └─────────┘       │
+│        │                    │           │
+│        └───────┬────────────┘           │
+│                ▼                        │
+│         ┌────────────┐                │
+│         │ Secondary  │                │
+│         │   Node     │                │
+│         │   (RO)     │                │
+│         └────────────┘                │
+└─────────────────────────────────────────┘
+
+SCENARIO 3: SHARDED CLUSTER
+┌─────────────────────────────────────────────────────┐
+│                Application Servers                   │
+│                       │                              │
+│                       ▼                              │
+│              ┌────────────────┐                     │
+│              │   mongos       │                     │
+│              │  Query Router  │                     │
+│              └────────────────┘                     │
+│                │           │                        │
+│         ┌──────┘           └──────┐                │
+│         ▼                         ▼                │
+│  ┌─────────────┐           ┌─────────────┐        │
+│  │  Config     │           │  Config     │        │
+│  │  Servers    │           │  Servers    │        │
+│  │ (Metadata)  │           │ (Metadata)  │        │
+│  └─────────────┘           └─────────────┘        │
+│         │                         │                │
+│         └──────────┬──────────────┘                │
+│                    ▼                               │
+│         ┌─────────────────────┐                   │
+│         │      Shard 1        │                   │
+│         │  (Replica Set)      │                   │
+│         └─────────────────────┘                   │
+│                    │                               │
+│         ┌──────────┴──────────┐                   │
+│         ▼                     ▼                   │
+│  ┌─────────────┐     ┌─────────────┐             │
+│  │   Shard 2   │     │   Shard 3   │             │
+│  │ (Replica Set)│     │ (Replica Set)│             │
+│  └─────────────┘     └─────────────┘             │
+└─────────────────────────────────────────────────────┘
+```
+
+## **3. Data Flow Architecture**
+
+### **MySQL Data Flow Architecture**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                 MySQL Data Flow Architecture             │
+├─────────────────────────────────────────────────────────┤
+│  CLIENT REQUEST FLOW:                                   │
+│                                                         │
+│  1. Connection Establishment                            │
+│     App → Connector → Authentication → Connection Pool  │
+│                                                         │
+│  2. Query Processing                                    │
+│     SQL Query → Parser → Optimizer → Executor          │
+│                                                         │
+│  3. Data Access                                         │
+│     a) Buffer Pool Check (In-Memory)                   │
+│     b) If not found: Read from Storage Engine          │
+│     c) Storage Engine retrieves from disk              │
+│                                                         │
+│  4. Transaction Flow (Write Operations):                │
+│     a) BEGIN Transaction                               │
+│     b) Write to Undo Log (for rollback)                │
+│     c) Write to Redo Log Buffer (WAL)                  │
+│     d) Modify Buffer Pool (dirty pages)                │
+│     e) COMMIT: Flush Redo Log to disk                  │
+│     f) Background: Flush dirty pages to data files     │
+│                                                         │
+│  5. Replication Flow:                                   │
+│     Master: Binary Log → Network → Slave: Relay Log    │
+│     Slave: SQL Thread applies changes                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### **MongoDB Data Flow Architecture**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                MongoDB Data Flow Architecture            │
+├─────────────────────────────────────────────────────────┤
+│  CLIENT REQUEST FLOW:                                   │
+│                                                         │
+│  1. Connection Establishment                            │
+│     App → Driver → Connection Pool → MongoDB Instance   │
+│                                                         │
+│  2. Query Routing (Sharded Cluster):                    │
+│     App → mongos → Config Servers (metadata) → Shards   │
+│                                                         │
+│  3. Query Execution:                                    │
+│     a) Query Parser & Planner                           │
+│     b) Index Selection & Query Optimization             │
+│     c) Storage Engine Query Processing                  │
+│                                                         │
+│  4. Write Operation Flow:                               │
+│     a) Document Validation (if schema enabled)          │
+│     b) Write to Journal (Write-Ahead Logging)           │
+│     c) Apply to In-Memory Cache                         │
+│     d) Acknowledge based on Write Concern               │
+│     e) Periodically: Checkpoint to Data Files           │
+│                                                         │
+│  5. Replication Flow (Replica Set):                     │
+│     Primary: Oplog → Network → Secondary: Oplog         │
+│     Secondary: Applies operations asynchronously        │
+│                                                         │
+│  6. Sharding Data Flow:                                 │
+│     a) mongos routes based on Shard Key                 │
+│     b) Config servers track chunk distribution          │
+│     c) Balancer moves chunks between shards             │
+└─────────────────────────────────────────────────────────┘
+```
+
+## **4. Data Storage Architecture**
+
+### **MySQL Physical Storage Architecture**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              MySQL InnoDB Storage Structure              │
+├─────────────────────────────────────────────────────────┤
+│  DATABASE LEVEL:                                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │                Database Directory                │   │
+│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐ │   │
+│  │  │  db.opt    │  │ table1.frm │  │ table2.frm │ │   │
+│  │  │ (DB options)│  │ (Table    │  │ (Table     │ │   │
+│  │  │             │  │  format)  │  │  format)   │ │   │
+│  │  └────────────┘  └────────────┘  └────────────┘ │   │
+│  │  ┌────────────┐  ┌────────────┐                │   │
+│  │  │ table1.ibd │  │ table2.ibd │                │   │
+│  │  │ (Data &    │  │ (Data &    │                │   │
+│  │  │  Indexes)  │  │  Indexes)  │                │   │
+│  │  └────────────┘  └────────────┘                │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  TABLE SPACE STRUCTURE (ibd file):                      │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │           InnoDB Tablespace (table1.ibd)        │   │
+│  │  ┌─────────────────────────────────────────┐   │   │
+│  │  │             Segment (Index)             │   │   │
+│  │  │  ┌─────────────────────────────────┐   │   │   │
+│  │  │  │          Extent (1MB)           │   │   │   │
+│  │  │  │  ┌─────────────────────────┐   │   │   │   │
+│  │  │  │  │      Page (16KB)        │   │   │   │   │
+│  │  │  │  │  ┌─────────────────┐   │   │   │   │   │
+│  │  │  │  │  │  Page Header    │   │   │   │   │   │
+│  │  │  │  │  ├─────────────────┤   │   │   │   │   │
+│  │  │  │  │  │  Infimum &      │   │   │   │   │   │
+│  │  │  │  │  │  Supremum       │   │   │   │   │   │
+│  │  │  │  │  ├─────────────────┤   │   │   │   │   │
+│  │  │  │  │  │  User Records   │   │   │   │   │   │
+│  │  │  │  │  │  (Row Data)     │   │   │   │   │   │
+│  │  │  │  │  ├─────────────────┤   │   │   │   │   │
+│  │  │  │  │  │  Page Directory │   │   │   │   │   │
+│  │  │  │  │  │  (Slots)        │   │   │   │   │   │
+│  │  │  │  │  ├─────────────────┤   │   │   │   │   │
+│  │  │  │  │  │  FIL Trailer    │   │   │   │   │   │
+│  │  │  │  │  └─────────────────┘   │   │   │   │   │
+│  │  │  │  └─────────────────────────┘   │   │   │   │
+│  │  │  └─────────────────────────────────┘   │   │   │
+│  │  └─────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  SYSTEM TABLESPACES:                                    │
+│  • ibdata1: System tablespace (data dictionary, undo)   │
+│  • ib_logfile0/1: Redo log files                       │
+│  • ibtmp1: Temporary tablespace                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+### **MongoDB Physical Storage Architecture**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              MongoDB WiredTiger Storage Structure        │
+├─────────────────────────────────────────────────────────┤
+│  DATABASE LEVEL:                                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │                Database Directory                │   │
+│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐ │   │
+│  │  │ collection │  │ collection │  │   journal  │ │   │
+│  │  │-1-12345.wt │  │-2-67890.wt │  │  files     │ │   │
+│  │  │ (Data file)│  │ (Data file)│  │ (WAL)      │ │   │
+│  │  └────────────┘  └────────────┘  └────────────┘ │   │
+│  │  ┌────────────┐  ┌────────────┐                │   │
+│  │  │  index-1-  │  │  index-2-  │                │   │
+│  │  │  12345.wt  │  │  67890.wt  │                │   │
+│  │  │ (Index     │  │ (Index     │                │   │
+│  │  │   file)    │  │   file)    │                │   │
+│  │  └────────────┘  └────────────┘                │   │
+│  │  ┌─────────────────────────────────────┐       │   │
+│  │  │          WiredTiger.wt              │       │   │
+│  │  │       (Metadata file)               │       │   │
+│  │  └─────────────────────────────────────┘       │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  WT FILE INTERNAL STRUCTURE:                           │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │            WiredTiger Data File (.wt)           │   │
+│  │  ┌─────────────────────────────────────────┐   │   │
+│  │  │               Extent                     │   │   │
+│  │  │  ┌─────────────────────────────────┐   │   │   │
+│  │  │  │           Page                  │   │   │   │
+│  │  │  │  ┌─────────────────────────┐   │   │   │   │
+│  │  │  │  │  Page Header            │   │   │   │   │
+│  │  │  │  ├─────────────────────────┤   │   │   │   │
+│  │  │  │  │  Cell Area              │   │   │   │   │
+│  │  │  │  │  (Key-Value pairs)      │   │   │   │   │
+│  │  │  │  │  • Document Data        │   │   │   │   │
+│  │  │  │  │  • Index Entries        │   │   │   │   │
+│  │  │  │  ├─────────────────────────┤   │   │   │   │
+│  │  │  │  │  Overflow Area          │   │   │   │   │
+│  │  │  │  │  (Large values)         │   │   │   │   │
+│  │  │  │  └─────────────────────────┘   │   │   │   │
+│  │  │  └─────────────────────────────────┘   │   │   │
+│  │  └─────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  MEMORY STRUCTURE:                                      │
+│  • WiredTiger Cache: Configurable (default: 50% of RAM) │
+│  • Journal Buffer: In-memory buffer for write ops      │
+│  • Internal Cache: B-tree nodes, overflow items        │
+└─────────────────────────────────────────────────────────┘
+```
+
+## **5. Data Handling & Processing Architecture**
+
+### **MySQL Data Processing Pipeline**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│            MySQL Data Processing Pipeline                │
+├─────────────────────────────────────────────────────────┤
+│                    READ OPERATION                        │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐   │
+│  │  Query  │→│  Parse   │→│ Optimize │→│ Execute  │   │
+│  │ Received│  │ (Syntax │  │ (Plan   │  │ (Access │   │
+│  └─────────┘  │  Tree)  │  │  Gen.)  │  │  Data)  │   │
+│                └─────────┘  └─────────┘  └─────────┘   │
+│                               │                         │
+│                    ┌──────────┴──────────┐              │
+│                    ▼                     ▼              │
+│             ┌─────────────┐       ┌─────────────┐      │
+│             │  Use Index  │       │ Full Table  │      │
+│             │   Scan      │       │   Scan      │      │
+│             └─────────────┘       └─────────────┘      │
+│                    │                     │              │
+│                    └──────────┬──────────┘              │
+│                               ▼                         │
+│                       ┌─────────────┐                  │
+│                       │ Buffer Pool │                  │
+│                       │   Check     │                  │
+│                       └─────────────┘                  │
+│                               │                         │
+│                    ┌──────────┴──────────┐              │
+│                    ▼                     ▼              │
+│             ┌─────────────┐       ┌─────────────┐      │
+│             │ Return from │       │ Read from   │      │
+│             │   Memory    │       │   Disk      │      │
+│             └─────────────┘       └─────────────┘      │
+│                    │                     │              │
+│                    └──────────┬──────────┘              │
+│                               ▼                         │
+│                       ┌─────────────┐                  │
+│                       │ Format &    │                  │
+│                       │ Return Data │                  │
+│                       └─────────────┘                  │
+│                                                         │
+│                    WRITE OPERATION                      │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐   │
+│  │  Write  │→│  Parse   │→│ Optimize │→│ Execute  │   │
+│  │ Request │  │ & Vali- │  │ (Plan   │  │ (Modify │   │
+│  └─────────┘  │  date)  │  │  Gen.)  │  │  Data)  │   │
+│                └─────────┘  └─────────┘  └─────────┘   │
+│                               │                         │
+│                    ┌──────────┴──────────┐              │
+│                    ▼                     ▼              │
+│             ┌─────────────┐       ┌─────────────┐      │
+│             │  Write to   │       │ Write to    │      │
+│             │  Undo Log   │       │ Redo Log    │      │
+│             │  (Rollback) │       │ (Recovery)  │      │
+│             └─────────────┘       └─────────────┘      │
+│                               │                         │
+│                               ▼                         │
+│                       ┌─────────────┐                  │
+│                       │ Modify      │                  │
+│                       │ Buffer Pool │                  │
+│                       │ (Dirty Page)│                  │
+│                       └─────────────┘                  │
+│                               │                         │
+│                    ┌──────────┴──────────┐              │
+│                    ▼                     ▼              │
+│             ┌─────────────┐       ┌─────────────┐      │
+│             │   Commit    │       │  Rollback   │      │
+│             │  (Flush     │       │ (Undo Log)  │      │
+│             │   Log)      │       │             │      │
+│             └─────────────┘       └─────────────┘      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### **MongoDB Data Processing Pipeline**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│           MongoDB Data Processing Pipeline               │
+├─────────────────────────────────────────────────────────┤
+│                    READ OPERATION                        │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐   │
+│  │  Query  │→│  Parse   │→│  Plan    │→│ Execute  │   │
+│  │ Received│  │  &      │  │ Generation│  │ Query   │   │
+│  └─────────┘  │ Validate│  │ & Caching│  └─────────┘   │
+│                └─────────┘  └─────────┘        │       │
+│                               │                 │       │
+│                    ┌──────────┴──────────┐      │       │
+│                    ▼                     ▼      │       │
+│             ┌─────────────┐       ┌─────────────┐      │
+│             │ Index-based │       │ Collection  │      │
+│             │   Query     │       │   Scan      │      │
+│             └─────────────┘       └─────────────┘      │
+│                    │                     │              │
+│                    └──────────┬──────────┘              │
+│                               ▼                         │
+│                       ┌─────────────┐                  │
+│                       │  Cache      │                  │
+│                       │   Check     │                  │
+│                       │ (Working Set)│                 │
+│                       └─────────────┘                  │
+│                               │                         │
+│                    ┌──────────┴──────────┐              │
+│                    ▼                     ▼              │
+│             ┌─────────────┐       ┌─────────────┐      │
+│             │ Return from │       │ Read from   │      │
+│             │   Cache     │       │ Data Files  │      │
+│             └─────────────┘       └─────────────┘      │
+│                    │                     │              │
+│                    └──────────┬──────────┘              │
+│                               ▼                         │
+│                       ┌─────────────┐                  │
+│                       │ Decompress  │                  │
+│                       │  & Format   │                  │
+│                       │   Results   │                  │
+│                       └─────────────┘                  │
+│                                                         │
+│                    WRITE OPERATION                      │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐   │
+│  │  Write  │→│ Validate │→│ Apply to │→│ Write to │   │
+│  │ Request │  │ Schema  │  │ Journal │  │  Cache  │   │
+│  └─────────┘  │ (if any)│  │  (WAL)  │  │         │   │
+│                └─────────┘  └─────────┘  └─────────┘   │
+│                               │                         │
+│                    ┌──────────┴──────────┐              │
+│                    ▼                     ▼              │
+│             ┌─────────────┐       ┌─────────────┐      │
+│             │ Wait for    │       │  Immediate  │      │
+│             │ Journal     │       │  Return     │      │
+│             │  Durability │       │ (WriteConcern)│    │
+│             └─────────────┘       └─────────────┘      │
+│                               │                         │
+│                               ▼                         │
+│                       ┌─────────────┐                  │
+│                       │ Acknowledge │                  │
+│                       │   to Client │                  │
+│                       └─────────────┘                  │
+│                               │                         │
+│                    ┌──────────┴──────────┐              │
+│                    ▼                     ▼              │
+│             ┌─────────────┐       ┌─────────────┐      │
+│             │ Background: │       │ Replication │      │
+│             │ Checkpoint  │       │  to Second- │      │
+│             │ to Disk     │       │    aries    │      │
+│             └─────────────┘       └─────────────┘      │
+└─────────────────────────────────────────────────────────┘
+```
+
+## **6. Index Architecture Comparison**
+
+### **MySQL Index Architecture (InnoDB)**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│               MySQL InnoDB Index Architecture           │
+├─────────────────────────────────────────────────────────┤
+│  PRIMARY KEY INDEX (CLUSTERED):                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │               B+ Tree Structure                 │   │
+│  │  ┌─────────────────────────────────────────┐   │   │
+│  │  │            Root Node                    │   │   │
+│  │  │  [Ptr|Key|Ptr|Key|Ptr|Key|Ptr]         │   │   │
+│  │  └─────────────────────────────────────────┘   │   │
+│  │          │              │              │        │   │
+│  │    ┌─────┘              └─────┐        └─────┐ │   │
+│  │    ▼                          ▼               ▼ │   │
+│  │  ┌─────┐                  ┌─────┐         ┌─────┐ │   │
+│  │  │Intermediate│          │Intermediate│   │Intermediate││
+│  │  │   Node     │          │   Node     │   │   Node     ││
+│  │  └─────┘                  └─────┘         └─────┘ │   │
+│  │     │                     │                  │     │   │
+│  │     ▼                     ▼                  ▼     │   │
+│  │  ┌─────┐              ┌─────┐            ┌─────┐   │   │
+│  │  │ Leaf  │              │ Leaf  │            │ Leaf  │   │   │
+│  │  │ Nodes │              │ Nodes │            │ Nodes │   │   │
+│  │  │ with  │              │ with  │            │ with  │   │   │
+│  │  │ Row   │              │ Row   │            │ Row   │   │   │
+│  │  │ Data  │              │ Data  │            │ Data  │   │   │
+│  │  └─────┘              └─────┘            └─────┘   │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  SECONDARY INDEX STRUCTURE:                             │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │               B+ Tree Structure                 │   │
+│  │  ┌─────────────────────────────────────────┐   │   │
+│  │  │            Root Node                    │   │   │
+│  │  │  [Ptr|Key|Ptr|Key|Ptr|Key|Ptr]         │   │   │
+│  │  └─────────────────────────────────────────┘   │   │
+│  │          │              │              │        │   │
+│  │    ┌─────┘              └─────┐        └─────┐ │   │
+│  │    ▼                          ▼               ▼ │   │
+│  │  ┌─────┐                  ┌─────┐         ┌─────┐ │   │
+│  │  │Intermediate│          │Intermediate│   │Intermediate││
+│  │  │   Node     │          │   Node     │   │   Node     ││
+│  │  └─────┘                  └─────┘         └─────┘ │   │
+│  │     │                     │                  │     │   │
+│  │     ▼                     ▼                  ▼     │   │
+│  │  ┌─────┐              ┌─────┐            ┌─────┐   │   │
+│  │  │ Leaf  │              │ Leaf  │            │ Leaf  │   │   │
+│  │  │ Nodes │              │ Nodes │            │ Nodes │   │   │
+│  │  │ with  │              │ with  │            │ with  │   │   │
+│  │  │ Index │              │ Index │            │ Index │   │   │
+│  │  │ Key + │              │ Key + │            │ Key + │   │   │
+│  │  │ PK Ref│              │ PK Ref│            │ PK Ref│   │   │
+│  │  └─────┘              └─────┘            └─────┘   │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  KEY FEATURES:                                          │
+│  • Clustered Index: Data stored with primary key       │
+│  • Secondary Indexes: Store primary key reference      │
+│  • Covering Indexes: Include all required columns      │
+│  • Composite Indexes: Multiple columns in one index    │
+│  • Full-text Indexes: For text search                  │
+│  • Spatial Indexes: R-tree for geospatial data        │
+└─────────────────────────────────────────────────────────┘
+```
+
+### **MongoDB Index Architecture (WiredTiger)**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              MongoDB WiredTiger Index Architecture      │
+├─────────────────────────────────────────────────────────┤
+│  DEFAULT INDEX STRUCTURE:                               │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │               B+ Tree Structure                 │   │
+│  │  ┌─────────────────────────────────────────┐   │   │
+│  │  │            Root Page                    │   │   │
+│  │  │  [Key|Value|Key|Value|Key|Value]       │   │   │
+│  │  └─────────────────────────────────────────┘   │   │
+│  │          │              │              │        │   │
+│  │    ┌─────┘              └─────┐        └─────┐ │   │
+│  │    ▼                          ▼               ▼ │   │
+│  │  ┌─────┐                  ┌─────┐         ┌─────┐ │   │
+│  │  │Internal│              │Internal│       │Internal││
+│  │  │ Pages  │              │ Pages  │       │ Pages  ││
+│  │  └─────┘                  └─────┘         └─────┘ │   │
+│  │     │                     │                  │     │   │
+│  │     ▼                     ▼                  ▼     │   │
+│  │  ┌─────┐              ┌─────┐            ┌─────┐   │   │
+│  │  │ Leaf  │              │ Leaf  │            │ Leaf  │   │   │
+│  │  │ Pages │              │ Pages │            │ Pages │   │   │
+│  │  │ with  │              │ with  │            │ with  │   │   │
+│  │  │ Key & │              │ Key & │            │ Key & │   │   │
+│  │  │ Value │              │ Value │            │ Value │   │   │
+│  │  │ Pairs │              │ Pairs │            │ Pairs │   │   │
+│  │  └─────┘              └─────┘            └─────┘   │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  INDEX TYPES & STRUCTURES:                              │
+│                                                         │
+│  1. SINGLE FIELD INDEX:                                 │
+│     Key: {field: 1} or {field: -1}                     │
+│     Value: Location pointer to document                 │
+│                                                         │
+│  2. COMPOUND INDEX:                                     │
+│     Key: {field1: 1, field2: -1, field3: 1}            │
+│     Value: Location pointer to document                 │
+│                                                         │
+│  3. MULTIKEY INDEX (Array Fields):                      │
+│     Key: Each array element indexed separately          │
+│     Value: Location pointer to document                 │
+│                                                         │
+│  4. TEXT INDEX:                                         │
+│     Key: Stemmed words from text fields                │
+│     Value: Document references with weights             │
+│                                                         │
+│  5. GEOSPATIAL INDEX:                                   │
+│     2dsphere: Spherical geometry                       │
+│     2d: Flat geometry                                  │
+│                                                         │
+│  6. HASHED INDEX:                                       │
+│     Key: Hash of field value                           │
+│     Value: Location pointer to document                 │
+│                                                         │
+│  7. WILDCARD INDEX:                                     │
+│     Key: All fields matching pattern                   │
+│     Value: Location pointer to document                 │
+│                                                         │
+│  8. TTL INDEX:                                          │
+│     Key: Timestamp field                               │
+│     Special: Automatic document expiration             │
+└─────────────────────────────────────────────────────────┘
+```
+
+## **7. High Availability Architecture**
+
+### **MySQL High Availability Patterns**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│          MySQL High Availability Architectures          │
+├─────────────────────────────────────────────────────────┤
+│  PATTERN 1: MASTER-REPLICA (ASYNC)                      │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │                 Application                     │   │
+│  │           ┌──────────┴──────────┐               │   │
+│  │           ▼                     ▼               │   │
+│  │     ┌──────────┐         ┌──────────┐         │   │
+│  │     │  Master  │◄───────►│  Replica │         │   │
+│  │     │ (Active) │ Binlog  │ (Standby)│         │   │
+│  │     │   RW     │ Replica │    RO    │         │   │
+│  │     └──────────┘         └──────────┘         │   │
+│  │           │                     │               │   │
+│  │           └──────────┬──────────┘               │   │
+│  │                      ▼                          │   │
+│  │              ┌────────────┐                    │   │
+│  │              │ Additional │                    │   │
+│  │              │  Replicas  │                    │   │
+│  │              └────────────┘                    │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Failover: Manual or with external tools             │
+│  • Data Loss: Possible (async replication)            │
+│                                                         │
+│  PATTERN 2: MASTER-MASTER (CIRCULAR)                   │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │            Application Servers                  │   │
+│  │       ┌────────────┴────────────┐              │   │
+│  │       ▼                         ▼              │   │
+│  │  ┌──────────┐            ┌──────────┐        │   │
+│  │  │  Master  │◄──────────►│  Master  │        │   │
+│  │  │    1     │  Binlog    │    2     │        │   │
+│  │  │   RW     │ Replication│   RW     │        │   │
+│  │  └──────────┘            └──────────┘        │   │
+│  │       │                         │              │   │
+│  │       └────────────┬────────────┘              │   │
+│  │                    ▼                           │   │
+│  │            ┌────────────┐                     │   │
+│  │            │  Read      │                     │   │
+│  │            │  Replicas  │                     │   │
+│  │            └────────────┘                     │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Both masters accept writes                         │
+│  • Conflict resolution required                       │
+│                                                         │
+│  PATTERN 3: GROUP REPLICATION (INNODB CLUSTER)         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │                 Application                     │   │
+│  │                       │                         │   │
+│  │                       ▼                         │   │
+│  │               ┌────────────┐                   │   │
+│  │               │   MySQL    │                   │   │
+│  │               │   Router   │                   │   │
+│  │               └────────────┘                   │   │
+│  │                 │         │                     │   │
+│  │          ┌──────┘         └──────┐             │   │
+│  │          ▼                       ▼             │   │
+│  │     ┌─────────┐           ┌─────────┐         │   │
+│  │     │  Group  │           │  Group  │         │   │
+│  │     │ Member 1│◄─────────►│ Member 2│         │   │
+│  │     │   RW    │  Group    │   RO/RW │         │   │
+│  │     └─────────┘ Replication└─────────┘         │   │
+│  │          │                       │             │   │
+│  │          └───────────┬───────────┘             │   │
+│  │                      ▼                         │   │
+│  │               ┌─────────┐                     │   │
+│  │               │  Group  │                     │   │
+│  │               │ Member 3│                     │   │
+│  │               │   RO/RW │                     │   │
+│  │               └─────────┘                     │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Automatic failover                                 │
+│  • Synchronous replication                            │
+│  • No single point of failure                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+### **MongoDB High Availability Patterns**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│         MongoDB High Availability Architectures         │
+├─────────────────────────────────────────────────────────┤
+│  PATTERN 1: REPLICA SET (3-NODE)                        │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │                 Applications                    │   │
+│  │           ┌──────────┴──────────┐               │   │
+│  │           ▼                     ▼               │   │
+│  │     ┌──────────┐         ┌──────────┐         │   │
+│  │     │ Primary  │◄───────►│Secondary │         │   │
+│  │     │  Node    │ Oplog   │  Node    │         │   │
+│  │     │   RW     │ Replica │    RO    │         │   │
+│  │     └──────────┘         └──────────┘         │   │
+│  │           │                     │               │   │
+│  │           └──────────┬──────────┘               │   │
+│  │                      ▼                          │   │
+│  │              ┌────────────┐                    │   │
+│  │              │ Secondary  │                    │   │
+│  │              │   Node     │                    │   │
+│  │              │    RO      │                    │   │
+│  │              └────────────┘                    │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Automatic failover (election)                       │
+│  • Data redundancy (multiple copies)                   │
+│  • Read scaling (secondaries)                          │
+│                                                         │
+│  PATTERN 2: REPLICA SET WITH ARBITER                   │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │                 Applications                    │   │
+│  │                       │                         │   │
+│  │                       ▼                         │   │
+│  │               ┌────────────┐                   │   │
+│  │               │  Primary   │                   │   │
+│  │               │    Node    │                   │   │
+│  │               └────────────┘                   │   │
+│  │                 │         │                     │   │
+│  │          ┌──────┘         └──────┐             │   │
+│  │          ▼                       ▼             │   │
+│  │     ┌─────────┐           ┌─────────┐         │   │
+│  │     │Secondary│           │ Arbiter │         │   │
+│  │     │  Node   │           │ (Vote   │         │   │
+│  │     │   RO    │           │ Only)   │         │   │
+│  │     └─────────┘           └─────────┘         │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Reduced cost (arbiter doesn't store data)          │
+│  • Maintains odd number of voting members             │
+│                                                         │
+│  PATTERN 3: GEO-DISTRIBUTED REPLICA SET                │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │           Region 1        Region 2              │   │
+│  │       ┌────────────┐   ┌────────────┐          │   │
+│  │       │  Primary   │   │ Secondary  │          │   │
+│  │       │    (DC1)   │   │   (DC2)    │          │   │
+│  │       │     RW     │   │     RO     │          │   │
+│  │       └────────────┘   └────────────┘          │   │
+│  │             │                 │                 │   │
+│  │       ┌─────┘                 └─────┐           │   │
+│  │       ▼                             ▼           │   │
+│  │  ┌────────────┐               ┌────────────┐    │   │
+│  │  │  Apps DC1  │               │  Apps DC2  │    │   │
+│  │  │   (Local   │               │   (Local   │    │   │
+│  │  │   Reads)   │               │   Reads)   │    │   │
+│  │  └────────────┘               └────────────┘    │   │
+│  │                                                  │   │
+│  │           Region 3                               │   │
+│  │       ┌────────────┐                            │   │
+│  │       │ Secondary  │                            │   │
+│  │       │   (DC3)    │                            │   │
+│  │       │     RO     │                            │   │
+│  │       └────────────┘                            │   │
+│  │             │                                   │   │
+│  │             ▼                                   │   │
+│  │       ┌────────────┐                            │   │
+│  │       │  Apps DC3  │                            │   │
+│  │       │   (Local   │                            │   │
+│  │       │   Reads)   │                            │   │
+│  │       └────────────┘                            │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Data locality for reads                            │
+│  • Disaster recovery across regions                   │
+│  • Compliance with data residency                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+## **8. Scalability Architecture**
+
+### **MySQL Scalability Patterns**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              MySQL Scalability Architectures            │
+├─────────────────────────────────────────────────────────┤
+│  VERTICAL SCALING (SCALE-UP):                           │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │            Single Server Evolution              │   │
+│  │  ┌────────────┐     ┌────────────┐            │   │
+│  │  │   Small    │ →   │  Medium    │ →          │   │
+│  │  │  Instance  │     │  Instance  │   ┌──────┐ │   │
+│  │  │ 2CPU 4GB   │     │ 4CPU 16GB  │   │Large │ │   │
+│  │  │  100GB SSD │     │  500GB SSD │   │Instance││   │
+│  │  └────────────┘     └────────────┘   │16CPU  ││   │
+│  │                                      │ 64GB   ││   │
+│  │                                      │ 2TB SSD││   │
+│  │                                      └──────┘ │   │
+│  │                                                │   │
+│  │  Advantages:                                    │   │
+│  │  • Simpler management                          │   │
+│  │  • No application changes                      │   │
+│  │  • Consistent performance                      │   │
+│  │                                                │   │
+│  │  Limitations:                                   │   │
+│  │  • Physical hardware limits                    │   │
+│  │  • Single point of failure                    │   │
+│  │  • Cost increases exponentially               │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  HORIZONTAL SCALING (READ):                            │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │           Read Replica Architecture             │   │
+│  │      ┌──────────────────────────────────┐      │   │
+│  │      │        Application Layer         │      │   │
+│  │      │  ┌────────────┐ ┌────────────┐  │      │   │
+│  │      │  │   App 1    │ │   App 2    │  │      │   │
+│  │      │  └────────────┘ └────────────┘  │      │   │
+│  │      └──────────┬────────────┬──────────┘      │   │
+│  │                 │            │                 │   │
+│  │         ┌───────┴──┐  ┌──────┴──────┐         │   │
+│  │         ▼          ▼  ▼             ▼         │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐     │   │
+│  │  │  Master  │ │ Replica 1│ │ Replica 2│     │   │
+│  │  │ (Writes) │ │ (Reads)  │ │ (Reads)  │     │   │
+│  │  │          │ │          │ │          │     │   │
+│  │  └──────────┘ └──────────┘ └──────────┘     │   │
+│  │        │            │            │           │   │
+│  │        └────────────┴────────────┘           │   │
+│  │                  Binlog                      │   │
+│  │               Replication                    │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Scale reads only                                   │
+│  • Write bottleneck remains                           │
+│  • Replication lag possible                           │
+│                                                         │
+│  HORIZONTAL SCALING (WRITE - COMPLEX):                 │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │             Sharding Architecture               │   │
+│  │      ┌──────────────────────────────────┐      │   │
+│  │      │        Application Layer         │      │   │
+│  │      │  ┌────────────┐ ┌────────────┐  │      │   │
+│  │      │  │   App 1    │ │   App 2    │  │      │   │
+│  │      │  └────────────┘ └────────────┘  │      │   │
+│  │      └──────────┬────────────┬──────────┘      │   │
+│  │                 │            │                 │   │
+│  │         ┌───────┴──┐  ┌──────┴──────┐         │   │
+│  │         ▼          ▼  ▼             ▼         │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐     │   │
+│  │  │  Shard 1 │ │  Shard 2 │ │  Shard 3 │     │   │
+│  │  │ (Data A- │ │ (Data H- │ │ (Data O- │     │   │
+│  │  │     G)   │ │     N)   │ │     Z)   │     │   │
+│  │  │  Master  │ │  Master  │ │  Master  │     │   │
+│  │  └──────────┘ └──────────┘ └──────────┘     │   │
+│  │        │            │            │           │   │
+│  │        ▼            ▼            ▼           │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐     │   │
+│  │  │ Replica  │ │ Replica  │ │ Replica  │     │   │
+│  │  │  Shard 1 │ │  Shard 2 │ │  Shard 3 │     │   │
+│  │  └──────────┘ └──────────┘ └──────────┘     │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Requires application-level sharding logic           │
+│  • Complex cross-shard queries                        │
+│  • Manual shard management                            │
+└─────────────────────────────────────────────────────────┘
+```
+
+### **MongoDB Scalability Patterns**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│            MongoDB Scalability Architectures            │
+├─────────────────────────────────────────────────────────┤
+│  HORIZONTAL SCALING (SHARDED CLUSTER):                  │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │          Sharded Cluster Architecture           │   │
+│  │      ┌──────────────────────────────────┐      │   │
+│  │      │        Application Layer         │      │   │
+│  │      │  ┌────────────┐ ┌────────────┐  │      │   │
+│  │      │  │   App 1    │ │   App 2    │  │      │   │
+│  │      │  └────────────┘ └────────────┘  │      │   │
+│  │      └────────────┬────────────┬──────────┘      │   │
+│  │                   │            │                 │   │
+│  │             ┌─────┴────────────┴─────┐         │   │
+│  │             ▼                         ▼         │   │
+│  │      ┌────────────┐           ┌────────────┐    │   │
+│  │      │   mongos   │           │   mongos   │    │   │
+│  │      │ (Query     │           │ (Query     │    │   │
+│  │      │  Router)   │           │  Router)   │    │   │
+│  │      └────────────┘           └────────────┘    │   │
+│  │             │                         │          │   │
+│  │      ┌──────┴────────────┬────────────┴──────┐  │   │
+│  │      ▼                   ▼                   ▼  │   │
+│  │  ┌─────────┐       ┌─────────┐       ┌─────────┐│   │
+│  │  │ Config  │       │ Config  │       │ Config  ││   │
+│  │  │ Server  │       │ Server  │       │ Server  ││   │
+│  │  │  (CSRS) │       │  (CSRS) │       │  (CSRS) ││   │
+│  │  └─────────┘       └─────────┘       └─────────┘│   │
+│  │        │                   │                   │  │   │
+│  │        └─────────┬─────────┴─────────┬─────────┘  │   │
+│  │                  ▼                   ▼            │   │
+│  │          ┌─────────────┐     ┌─────────────┐      │   │
+│  │          │   Shard 1   │     │   Shard 2   │      │   │
+│  │          │ (Replica    │     │ (Replica    │      │   │
+│  │          │    Set)     │     │    Set)     │      │   │
+│  │          └─────────────┘     └─────────────┘      │   │
+│  │                  │                   │            │   │
+│  │                  ▼                   ▼            │   │
+│  │          ┌─────────────┐     ┌─────────────┐      │   │
+│  │          │   Shard 3   │     │   Shard N   │      │   │
+│  │          │ (Replica    │     │ (Replica    │      │   │
+│  │          │    Set)     │     │    Set)     │      │   │
+│  │          └─────────────┘     └─────────────┘      │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Automatic shard key-based distribution             │
+│  • Transparent to applications                        │
+│  • Linear scalability                                 │
+│                                                         │
+│  TIERED ARCHITECTURE (ATLAS):                          │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │            Multi-Tier Deployment                │   │
+│  │  ┌─────────────────────────────────────────┐   │   │
+│  │  │          Application Tier               │   │   │
+│  │  │  • Web/App Servers                      │   │   │
+│  │  │  • Microservices                        │   │   │
+│  │  │  • API Gateways                         │   │   │
+│  │  └─────────────────────────────────────────┘   │   │
+│  │                      │                          │   │
+│  │                      ▼                          │   │
+│  │  ┌─────────────────────────────────────────┐   │   │
+│  │  │           Database Tier                 │   │   │
+│  │  │  ┌──────┐ ┌──────┐ ┌──────┐           │   │   │
+│  │  │  │ M10  │ │ M20  │ │ M30  │           │   │   │
+│  │  │  │(Dev/ │ │(Test/│ │(Prod │           │   │   │
+│  │  │  │ Test)│ │ Stage│ │Cluster│           │   │   │
+│  │  │  └──────┘ └──────┘ └──────┘           │   │   │
+│  │  └─────────────────────────────────────────┘   │   │
+│  │                      │                          │   │
+│  │                      ▼                          │   │
+│  │  ┌─────────────────────────────────────────┐   │   │
+│  │  │          Analytics Tier                 │   │   │
+│  │  │  • MongoDB Charts                       │   │   │
+│  │  │  • Atlas Data Lake                      │   │   │
+│  │  │  • BI Connectors                        │   │   │
+│  │  └─────────────────────────────────────────┘   │   │
+│  │                      │                          │   │
+│  │                      ▼                          │   │
+│  │  ┌─────────────────────────────────────────┐   │   │
+│  │  │           Archive Tier                  │   │   │
+│  │  │  • Online Archive                       │   │   │
+│  │  │  • Cold Storage                         │   │   │
+│  │  │  • Compliance Storage                   │   │   │
+│  │  └─────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────┘   │
+│  • Cost optimization across tiers                     │
+│  • Performance isolation                              │
+│  • Automated tiering                                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## **Summary of Architectural Differences**
+
+| **Architectural Aspect** | **MySQL** | **MongoDB** |
+|--------------------------|-----------|-------------|
+| **Primary Architecture** | Monolithic, single-node focused | Distributed, cluster-first |
+| **Scaling Philosophy** | Scale-up first, scale-out complex | Scale-out first, native horizontal scaling |
+| **Data Distribution** | Manual sharding, application-managed | Automatic sharding, database-managed |
+| **High Availability** | External tools or Group Replication | Built-in replica sets with automatic failover |
+| **Consistency Model** | Strong consistency (ACID) | Tunable consistency (write concerns) |
+| **Data Model** | Fixed schema, normalized | Flexible schema, denormalized |
+| **Query Processing** | Single-node query optimization | Distributed query processing |
+| **Storage Engine** | Pluggable (InnoDB, MyISAM) | WiredTiger (default), pluggable |
+| **Connection Handling** | Thread-per-connection | Event-driven, connection pooling |
+| **Backup Architecture** | File-level or logical backups | Point-in-time, snapshot-based |
+| **Monitoring** | External tools required | Built-in monitoring (Atlas/Ops Manager) |
+
+---
+
+**This comprehensive architecture documentation provides detailed visual representations and descriptions of how MySQL and MongoDB handle data at an architectural level. Each diagram can be expanded into a full architectural specification for implementation purposes.**
